@@ -9,6 +9,9 @@ public class Grid : MonoBehaviour {
         EMPTY,
         NORMAL,
         BUBBLE,
+        ROW_CLEAR,
+        COLUMN_CLEAR,
+        RAINBOW,
         COUNT,
     };
 
@@ -19,12 +22,24 @@ public class Grid : MonoBehaviour {
         public GameObject prefab;
     }
 
+    [System.Serializable]
+    public struct PiecePosition
+    {
+        public PieceType type;
+        public int x;
+        public int y;
+    };
+
 	public int xDim;
 	public int yDim;
     public float fillTime;
 
+    public Level level;
+
     public PiecePrefab[] piecePrefabs;
     public GameObject backgroundPrefab;
+
+    public PiecePosition[] initialPieces;
 
     private Dictionary<PieceType, GameObject> piecePrefabDict;
 
@@ -35,8 +50,17 @@ public class Grid : MonoBehaviour {
     private GamePiece pressedPiece;
     private GamePiece enteredPiece;
 
+    private bool gameOver = false;
+
+    private bool isFilling = false;
+
+    public bool IsFilling
+    {
+        get { return isFilling; }
+    }
+
 	// Use this for initialization
-	void Start () {
+	void Awake () {
         piecePrefabDict = new Dictionary<PieceType, GameObject>();
         for (int i = 0;i < piecePrefabs.Length; i++)
         {
@@ -56,22 +80,25 @@ public class Grid : MonoBehaviour {
         }
 
         pieces = new GamePiece[xDim, yDim];
+
+        for (int i = 0; i < initialPieces.Length; i++)
+        {
+            if (initialPieces [i].x >= 0 && initialPieces [i].x < xDim && initialPieces [i].y >= 0 && initialPieces [i].y < yDim)
+            {
+                SpawnNewPiece(initialPieces[i].x, initialPieces[i].y, initialPieces[i].type);
+            }
+        }
+
         for (int x = 0; x < xDim; x++)
         {
             for (int y = 0; y < yDim; y++)
             {
-                SpawnNewPiece(x, y, PieceType.EMPTY);
+                if (pieces[x, y] == null) //if piece == null, there isn't already a piece there
+                {
+                    SpawnNewPiece(x, y, PieceType.EMPTY);
+                }
             }
         }
-
-        Destroy(pieces[4, 4].gameObject);
-        SpawnNewPiece(4, 4, PieceType.BUBBLE);
-
-        Destroy(pieces[3, 6].gameObject);
-        SpawnNewPiece(3, 6, PieceType.BUBBLE);
-
-        Destroy(pieces[6, 3].gameObject);
-        SpawnNewPiece(6, 3, PieceType.BUBBLE);
 
         StartCoroutine(Fill());
 	}
@@ -84,6 +111,8 @@ public class Grid : MonoBehaviour {
     public IEnumerator Fill()
     {
         bool needsRefill = true;
+        isFilling = true;
+        Debug.Log("isFilling true");
 
         while (needsRefill)
         {
@@ -102,6 +131,9 @@ public class Grid : MonoBehaviour {
             inverse = !inverse;
             yield return new WaitForSeconds(fillTime);
         }
+
+        isFilling = false;
+        Debug.Log("isFilling false");
     }
 
     public bool FillStep()
@@ -233,12 +265,17 @@ public class Grid : MonoBehaviour {
 
     public void SwapPieces(GamePiece piece1, GamePiece piece2)
     {
+        if (gameOver)
+        {
+            return;
+        }
+
         if (piece1.IsMovable () && piece2.IsMovable ())
         {
             pieces[piece1.X, piece1.Y] = piece2;
             pieces[piece2.X, piece2.Y] = piece1;
 
-            if (GetMatch(piece1, piece2.X, piece2.Y) != null || GetMatch(piece2, piece1.X, piece1.Y) != null)
+            if (GetMatch(piece1, piece2.X, piece2.Y) != null || GetMatch(piece2, piece1.X, piece1.Y) != null || piece1.Type == PieceType.RAINBOW || piece2.Type == PieceType.RAINBOW)
             {
                 int piece1X = piece1.X;
                 int piece1Y = piece1.Y;
@@ -246,9 +283,48 @@ public class Grid : MonoBehaviour {
                 piece1.MovableComponent.Move(piece2.X, piece2.Y, fillTime);
                 piece2.MovableComponent.Move(piece1X, piece1Y, fillTime);
 
+                if (piece1.Type == PieceType.RAINBOW && piece1.IsClearable() && piece2.IsColored())
+                {
+                    ClearColorPiece clearColor = piece1.GetComponent<ClearColorPiece>();
+
+                    if (clearColor)
+                    {
+                        clearColor.Color = piece2.ColorComponent.Color;
+                    }
+
+                    ClearPiece(piece1.X, piece1.Y);
+                }
+
+                if (piece2.Type == PieceType.RAINBOW && piece2.IsClearable() && piece1.IsColored())
+                {
+                    ClearColorPiece clearColor = piece2.GetComponent<ClearColorPiece>();
+
+                    if (clearColor)
+                    {
+                        clearColor.Color = piece1.ColorComponent.Color;
+                    }
+
+                    ClearPiece(piece2.X, piece2.Y);
+                }
+
                 ClearAllValidMatches();
 
+                if (piece1.Type == PieceType.ROW_CLEAR || piece1.Type == PieceType.COLUMN_CLEAR)
+                {
+                    ClearPiece(piece1.X, piece1.Y);
+                }
+
+                if (piece2.Type == PieceType.ROW_CLEAR || piece2.Type == PieceType.COLUMN_CLEAR)
+                {
+                    ClearPiece(piece2.X, piece2.Y);
+                }
+
+                pressedPiece = null;
+                enteredPiece = null;
+
                 StartCoroutine(Fill());
+
+                level.OnMove();
             }
             else
             {
@@ -502,11 +578,57 @@ public class Grid : MonoBehaviour {
 
                     if (match != null)
                     {
+                        PieceType specialPieceType = PieceType.COUNT;
+                        GamePiece randomPiece = match[Random.Range(0, match.Count)];
+                        int specialPieceX = randomPiece.X;
+                        int specialPieceY = randomPiece.Y;
+
+                        if (match.Count == 4)
+                        {
+                            if (pressedPiece == null || enteredPiece == null)
+                            {
+                                specialPieceType = (PieceType)Random.Range((int)PieceType.ROW_CLEAR, (int)PieceType.COLUMN_CLEAR);
+                            }
+                            else if (pressedPiece.Y == enteredPiece.Y)
+                            {
+                                specialPieceType = PieceType.ROW_CLEAR;
+                            }
+                            else
+                            {
+                                specialPieceType = PieceType.COLUMN_CLEAR;
+                            }
+                        }
+                        else if (match.Count >= 5)
+                        {
+                            specialPieceType = PieceType.RAINBOW;
+                        }
+
                         for (int i = 0; i < match.Count; i++)
                         {
                             if (ClearPiece (match[i].X, match[i].Y))
                             {
                                 needsRefill = true;
+
+                                if (match[i] == pressedPiece || match[i] == enteredPiece)
+                                {
+                                    specialPieceX = match[i].X;
+                                    specialPieceY = match[i].Y;
+                                }
+                            }
+                        }
+
+                        if (specialPieceType != PieceType.COUNT)
+                        {
+                            Destroy(pieces[specialPieceX, specialPieceY]);
+                            GamePiece newPiece = SpawnNewPiece(specialPieceX, specialPieceY, specialPieceType);
+
+                            if ((specialPieceType == PieceType.ROW_CLEAR || specialPieceType == PieceType.COLUMN_CLEAR) && newPiece.IsColored() && match[0].IsColored())
+                            {
+                                newPiece.ColorComponent.SetColor(match[0].ColorComponent.Color);
+                            }
+                            else if (specialPieceType == PieceType.RAINBOW && newPiece.IsColored())
+                            {
+                                newPiece.ColorComponent.SetColor(ColorPiece.ColorType.ANY);
                             }
                         }
                     }
@@ -557,5 +679,58 @@ public class Grid : MonoBehaviour {
                 }
             }
         }
+    }
+
+    public void ClearRow(int row)
+    {
+        for (int x = 0; x < xDim; x++)
+        {
+            ClearPiece(x, row);
+        }
+    }
+
+    public void ClearColumn(int column)
+    {
+        for (int y = 0; y < yDim; y++)
+        {
+            ClearPiece(column, y);
+        }
+    }
+
+    public void ClearColor(ColorPiece.ColorType color)
+    {
+        for (int x = 0; x < xDim; x++)
+        {
+            for (int y = 0; y < yDim; y++)
+            {
+                if (pieces[x,y].IsColored() && (pieces[x,y].ColorComponent.Color == color || color == ColorPiece.ColorType.ANY))
+                {
+                    ClearPiece(x, y);
+                }
+            }
+        }
+    }
+
+    public void GameOver()
+    {
+        gameOver = true;
+    }
+
+    public List<GamePiece> GetPiecesOfType(PieceType type)
+    {
+        List<GamePiece> piecesOfType = new List<GamePiece>();
+
+        for (int x = 0; x < xDim; x++)
+        {
+            for (int y = 0; y < yDim; y++)
+            {
+                if (pieces[x,y].Type == type)
+                {
+                    piecesOfType.Add(pieces[x, y]);
+                }
+            }
+        }
+
+        return piecesOfType;
     }
 }
