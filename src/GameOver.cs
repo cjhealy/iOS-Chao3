@@ -83,8 +83,8 @@ public class GameOver : MonoBehaviour {
         UnityEngine.SceneManagement.SceneManager.LoadScene(UnityEngine.SceneManagement.SceneManager.GetActiveScene().name);
     }
 
-    public void OnDoneClicked()
+    public void OnDoneClicked() //load the "LevelSelect" scene after user clicks done
     {
-
+        UnityEngine.SceneManagement.SceneManager.LoadScene("LevelSelect");
     }
 }

@@ -71,7 +71,7 @@ public class Grid : MonoBehaviour {
         }
         for(int x = 0; x < xDim; x++)
         {
-            for(int y = 0; y < xDim; y++)
+            for(int y = 0; y < yDim; y++)
             {
                 GameObject background = (GameObject)Instantiate(backgroundPrefab, GetWorldPosition(x, y), Quaternion.identity);
                 background.transform.parent = transform;
