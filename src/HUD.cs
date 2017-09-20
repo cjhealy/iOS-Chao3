@@ -89,17 +89,17 @@ public class HUD : MonoBehaviour {
     {
         if (type == Level.LevelType.MOVES)
         {
-            remainingSubtext.text = "moves remaining";
+            remainingSubtext.text = "moves";
             targetSubtext.text = "target score";
         }
         else if (type == Level.LevelType.OBSTACLE)
         {
-            remainingSubtext.text = "moves remaining";
+            remainingSubtext.text = "moves";
             targetSubtext.text = "obstacles remaining";
         }
         else if (type == Level.LevelType.TIMER)
         {
-            remainingSubtext.text = "time remaining";
+            remainingSubtext.text = "time";
             targetSubtext.text = "target score";
         }
     }
@@ -107,6 +107,10 @@ public class HUD : MonoBehaviour {
     public void OnGameWin(int score)
     {
         gameOver.ShowWin(score, starIDx);
+        if (starIDx > PlayerPrefs.GetInt(UnityEngine.SceneManagement.SceneManager.GetActiveScene().name, 0))
+        {
+            PlayerPrefs.SetInt(UnityEngine.SceneManagement.SceneManager.GetActiveScene().name, starIDx);
+        }
     }
 
     public void OnGameLose()
