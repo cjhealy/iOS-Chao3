@@ -10,3 +10,7 @@ Description:
 
 Credits:  
 *    Lots of credit goes to Kelley Hecker whose tutorials have helped tremendously.
+  
+  
+![Area Select](https://raw.githubusercontent.com/cjhealy/iOS-Chao3/9575cf5ff3db21de298a6da5017b0e6940154bcc/areaselect.png)  
+![Within a Level](https://raw.githubusercontent.com/cjhealy/iOS-Chao3/9575cf5ff3db21de298a6da5017b0e6940154bcc/levelmoves.png)  
